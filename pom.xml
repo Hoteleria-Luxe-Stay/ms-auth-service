@@ -20,7 +20,7 @@
     <properties>
         <java.version>21</java.version>
         <jjwt.version>0.13.0</jjwt.version>
-        <springdoc.version>2.3.0</springdoc.version>
+        <springdoc.version>2.8.15</springdoc.version>
         <openapi.generator.version>7.6.0</openapi.generator.version>
     </properties>
 
@@ -50,6 +50,14 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+
+        <!-- OpenAPI nullable (JsonNullable) -->
+        <dependency>
+            <groupId>org.openapitools</groupId>
+            <artifactId>jackson-databind-nullable</artifactId>
+            <version>0.2.6</version>
+        </dependency>
+
 
         <!-- RabbitMQ -->
         <dependency>
@@ -152,10 +160,8 @@
                             </configOptions>
                             <generateModels>true</generateModels>
                             <generateModelTests>false</generateModelTests>
-                            <generateModelDocs>false</generateModelDocs>
                             <generateApiTests>false</generateApiTests>
-                            <generateApiDocs>false</generateApiDocs>
-                            <generateSupportingFiles>false</generateSupportingFiles>
+                            <generateSupportingFiles>true</generateSupportingFiles>
                         </configuration>
                     </execution>
                 </executions>

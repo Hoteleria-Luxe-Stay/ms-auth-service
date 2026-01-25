@@ -11,6 +11,8 @@ import com.hotel.auth.domain.service.AuthService;
 import com.hotel.auth.domain.service.TokenService;
 import com.hotel.auth.helpers.exceptions.ConflictException;
 import com.hotel.auth.helpers.exceptions.EntityNotFoundException;
+import com.hotel.auth.infrastructure.events.EventPublisher;
+import com.hotel.auth.infrastructure.events.UserRegisteredEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -38,17 +40,20 @@ public class AuthServiceImpl implements AuthService, UserDetailsService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationConfiguration authenticationConfiguration;
     private final RoleRepository roleRepository;
+    private final EventPublisher eventPublisher;
 
     public AuthServiceImpl(UserRepository userRepository,
                            TokenService tokenService,
                            PasswordEncoder passwordEncoder,
                            AuthenticationConfiguration authenticationConfiguration,
-                           RoleRepository roleRepository) {
+                           RoleRepository roleRepository,
+                           EventPublisher eventPublisher) {
         this.userRepository = userRepository;
         this.tokenService = tokenService;
         this.passwordEncoder = passwordEncoder;
         this.authenticationConfiguration = authenticationConfiguration;
         this.roleRepository = roleRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -103,6 +108,15 @@ public class AuthServiceImpl implements AuthService, UserDetailsService {
 
         User user = userRepository.save(createUser);
         LOGGER.info("[USER] : User successfully created with id {}", user.getId());
+
+        // Publicar evento de usuario registrado
+        UserRegisteredEvent event = new UserRegisteredEvent(
+                user.getId(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getRole().getRolename()
+        );
+        eventPublisher.publishUserRegistered(event);
     }
 
     @Override
