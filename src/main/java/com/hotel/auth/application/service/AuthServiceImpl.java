@@ -12,6 +12,7 @@ import com.hotel.auth.domain.service.TokenService;
 import com.hotel.auth.helpers.exceptions.ConflictException;
 import com.hotel.auth.helpers.exceptions.EntityNotFoundException;
 import com.hotel.auth.infrastructure.events.EventPublisher;
+import com.hotel.auth.infrastructure.events.UserLoginEvent;
 import com.hotel.auth.infrastructure.events.UserRegisteredEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,6 +66,14 @@ public class AuthServiceImpl implements AuthService, UserDetailsService {
 
             User user = (User) authentication.getPrincipal();
             String token = tokenService.generateToken(authentication);
+
+            UserLoginEvent loginEvent = new UserLoginEvent(
+                    user.getId(),
+                    user.getUsername(),
+                    user.getEmail(),
+                    user.getRole().getRolename()
+            );
+            eventPublisher.publishUserLogin(loginEvent);
 
             return Map.of("access-token", token);
         } catch (BadCredentialsException e) {

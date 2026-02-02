@@ -1,55 +1,5 @@
 spring:
   application:
     name: auth-service
-
-  datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/auth_db?useSSL=false&serverTimezone=UTC}
-    username: ${SPRING_DATASOURCE_USERNAME:root}
-    password: ${SPRING_DATASOURCE_PASSWORD:cancer16}
-    driver-class-name: com.mysql.cj.jdbc.Driver
-
-  jpa:
-    hibernate:
-      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
-    show-sql: ${SPRING_JPA_SHOW_SQL:true}
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.MySQLDialect
-
-  rabbitmq:
-    host: ${SPRING_RABBITMQ_HOST:localhost}
-    port: ${SPRING_RABBITMQ_PORT:5672}
-    username: ${SPRING_RABBITMQ_USERNAME:admin}
-    password: ${SPRING_RABBITMQ_PASSWORD:admin123}
-
-server:
-  port: ${SERVER_PORT:8081}
-  servlet:
-    context-path: /api/v1
-
-# JWT Configuration
-application:
-  security:
-    jwt:
-      secret-key: ${JWT_SECRET_KEY:9a8b7c6d5e4f3g2h1i0j9k8l7m6n5o4p3q2r1s0t9a8b7c6d5e4f3g2h1i0j9k8l7m6n5o4p}
-      expiration: ${JWT_EXPIRATION:3600}
-      refresh-expiration: ${JWT_REFRESH_EXPIRATION:86400}
-  cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
-
-# Actuator
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics
-  endpoint:
-    health:
-      show-details: always
-
-# OpenAPI
-springdoc:
-  api-docs:
-    path: /api-docs
-  swagger-ui:
-    path: /swagger-ui.html
+  config:
+    import: optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}

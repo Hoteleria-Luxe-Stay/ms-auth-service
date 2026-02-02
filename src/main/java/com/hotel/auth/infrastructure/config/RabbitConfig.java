@@ -13,6 +13,7 @@ public class RabbitConfig {
 
     public static final String EVENTS_EXCHANGE = "hotel.events";
     public static final String USER_REGISTERED_ROUTING_KEY = "user.registered";
+    public static final String USER_LOGIN_ROUTING_KEY = "user.login";
 
     @Bean
     public TopicExchange eventsExchange() {

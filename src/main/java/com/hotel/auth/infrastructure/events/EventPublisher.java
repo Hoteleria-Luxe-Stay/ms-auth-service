@@ -29,4 +29,17 @@ public class EventPublisher {
             LOGGER.error("[EVENT] Error publishing UserRegistered event: {}", e.getMessage(), e);
         }
     }
+
+    public void publishUserLogin(UserLoginEvent event) {
+        try {
+            rabbitTemplate.convertAndSend(
+                    RabbitConfig.EVENTS_EXCHANGE,
+                    RabbitConfig.USER_LOGIN_ROUTING_KEY,
+                    event
+            );
+            LOGGER.info("[EVENT] UserLogin published for userId: {}", event.getUserId());
+        } catch (Exception e) {
+            LOGGER.error("[EVENT] Error publishing UserLogin event: {}", e.getMessage(), e);
+        }
+    }
 }
