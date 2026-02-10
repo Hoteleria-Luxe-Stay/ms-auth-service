@@ -5,13 +5,17 @@ import com.hotel.auth.api.dto.LoginRequest;
 import com.hotel.auth.api.dto.RegisterRequest;
 import com.hotel.auth.domain.model.Role;
 import com.hotel.auth.domain.model.User;
+import com.hotel.auth.domain.model.PasswordResetToken;
+import com.hotel.auth.domain.repository.PasswordResetTokenRepository;
 import com.hotel.auth.domain.repository.RoleRepository;
 import com.hotel.auth.domain.repository.UserRepository;
 import com.hotel.auth.domain.service.AuthService;
 import com.hotel.auth.domain.service.TokenService;
 import com.hotel.auth.helpers.exceptions.ConflictException;
 import com.hotel.auth.helpers.exceptions.EntityNotFoundException;
+import com.hotel.auth.helpers.exceptions.ValidationException;
 import com.hotel.auth.infrastructure.events.EventPublisher;
+import com.hotel.auth.infrastructure.events.PasswordResetEvent;
 import com.hotel.auth.infrastructure.events.UserLoginEvent;
 import com.hotel.auth.infrastructure.events.UserRegisteredEvent;
 import org.slf4j.Logger;
@@ -26,8 +30,11 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.util.Map;
+import java.time.LocalDateTime;
+import java.util.Random;
 
 @Service
 public class AuthServiceImpl implements AuthService, UserDetailsService {
@@ -42,19 +49,31 @@ public class AuthServiceImpl implements AuthService, UserDetailsService {
     private final AuthenticationConfiguration authenticationConfiguration;
     private final RoleRepository roleRepository;
     private final EventPublisher eventPublisher;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
+
+    @Value("${application.security.password-reset-expiration-minutes:30}")
+    private int passwordResetExpirationMinutes;
+
+    @Value("${application.security.password-reset-max-attempts:3}")
+    private int passwordResetMaxAttempts;
+
+    @Value("${application.security.password-reset-block-minutes:15}")
+    private int passwordResetBlockMinutes;
 
     public AuthServiceImpl(UserRepository userRepository,
                            TokenService tokenService,
                            PasswordEncoder passwordEncoder,
                            AuthenticationConfiguration authenticationConfiguration,
                            RoleRepository roleRepository,
-                           EventPublisher eventPublisher) {
+                           EventPublisher eventPublisher,
+                           PasswordResetTokenRepository passwordResetTokenRepository) {
         this.userRepository = userRepository;
         this.tokenService = tokenService;
         this.passwordEncoder = passwordEncoder;
         this.authenticationConfiguration = authenticationConfiguration;
         this.roleRepository = roleRepository;
         this.eventPublisher = eventPublisher;
+        this.passwordResetTokenRepository = passwordResetTokenRepository;
     }
 
     @Override
@@ -144,5 +163,82 @@ public class AuthServiceImpl implements AuthService, UserDetailsService {
                     LOGGER.error("[USER] : User not found with email {}", username);
                     return new UsernameNotFoundException("User not found");
                 });
+    }
+
+    @Override
+    public void requestPasswordReset(String email) {
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            LOGGER.info("[PASSWORD RESET] Email not found: {}", email);
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        long recentAttempts = passwordResetTokenRepository.countByUserAndCreatedAtAfter(
+                user,
+                now.minusMinutes(passwordResetBlockMinutes)
+        );
+        if (recentAttempts >= passwordResetMaxAttempts) {
+            throw new ValidationException("email", "Demasiados intentos. Intenta nuevamente en 15 minutos");
+        }
+
+        passwordResetTokenRepository.findByUserAndUsedAtIsNull(user)
+                .forEach(token -> {
+                    token.setUsedAt(LocalDateTime.now());
+                    passwordResetTokenRepository.save(token);
+                });
+
+        String code = generateCode();
+        PasswordResetToken token = new PasswordResetToken();
+        token.setUser(user);
+        token.setCode(code);
+        token.setCreatedAt(now);
+        token.setExpiresAt(now.plusMinutes(passwordResetExpirationMinutes));
+        passwordResetTokenRepository.save(token);
+
+        PasswordResetEvent event = new PasswordResetEvent(
+                user.getId(),
+                user.getUsername(),
+                user.getEmail(),
+                code
+        );
+        eventPublisher.publishPasswordReset(event);
+    }
+
+    @Override
+    public void verifyPasswordResetCode(String email, String code) {
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            throw new ValidationException("email", "Email inválido");
+        }
+        PasswordResetToken token = passwordResetTokenRepository.findByUserAndCodeAndUsedAtIsNull(user, code)
+                .orElseThrow(() -> new ValidationException("code", "Código inválido"));
+        if (token.getExpiresAt() != null && token.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new ValidationException("code", "Código expirado");
+        }
+    }
+
+    @Override
+    public void resetPassword(String email, String code, String newPassword) {
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            throw new ValidationException("email", "Email inválido");
+        }
+        PasswordResetToken token = passwordResetTokenRepository.findByUserAndCodeAndUsedAtIsNull(user, code)
+                .orElseThrow(() -> new ValidationException("code", "Código inválido"));
+
+        if (token.getExpiresAt() != null && token.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new ValidationException("code", "Código expirado");
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        passwordResetTokenRepository.delete(token);
+    }
+
+    private String generateCode() {
+        int code = new Random().nextInt(1_000_000);
+        return String.format("%06d", code);
     }
 }

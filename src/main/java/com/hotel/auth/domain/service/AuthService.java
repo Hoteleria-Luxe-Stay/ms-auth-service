@@ -17,4 +17,10 @@ public interface AuthService {
     void createUser(RegisterRequest registerRequest);
 
     User getUser(Long id);
+
+    void requestPasswordReset(String email);
+
+    void verifyPasswordResetCode(String email, String code);
+
+    void resetPassword(String email, String code, String newPassword);
 }

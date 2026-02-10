@@ -4,6 +4,10 @@ import com.hotel.auth.api.AuthApi;
 import com.hotel.auth.api.UsersApi;
 import com.hotel.auth.api.dto.AuthResponse;
 import com.hotel.auth.api.dto.LoginRequest;
+import com.hotel.auth.api.dto.MessageResponse;
+import com.hotel.auth.api.dto.PasswordResetConfirmRequest;
+import com.hotel.auth.api.dto.PasswordResetRequest;
+import com.hotel.auth.api.dto.PasswordResetVerifyRequest;
 import com.hotel.auth.api.dto.RefreshTokenRequest;
 import com.hotel.auth.api.dto.RegisterRequest;
 import com.hotel.auth.api.dto.TokenValidationResponse;
@@ -115,6 +119,30 @@ public class AuthController implements AuthApi, UsersApi {
                 .orElseThrow(() -> new EntityNotFoundException("User", email));
 
         TokenValidationResponse response = AuthMapper.toTokenValidationResponse(user, true);
+        return ResponseEntity.ok(response);
+    }
+
+    @Override
+    public ResponseEntity<MessageResponse> requestPasswordReset(PasswordResetRequest request) {
+        authService.requestPasswordReset(request.getEmail());
+        MessageResponse response = new MessageResponse();
+        response.setMessage("Si el correo existe, enviaremos instrucciones");
+        return ResponseEntity.ok(response);
+    }
+
+    @Override
+    public ResponseEntity<MessageResponse> verifyPasswordReset(PasswordResetVerifyRequest request) {
+        authService.verifyPasswordResetCode(request.getEmail(), request.getCode());
+        MessageResponse response = new MessageResponse();
+        response.setMessage("Código verificado");
+        return ResponseEntity.ok(response);
+    }
+
+    @Override
+    public ResponseEntity<MessageResponse> resetPassword(PasswordResetConfirmRequest request) {
+        authService.resetPassword(request.getEmail(), request.getCode(), request.getNewPassword());
+        MessageResponse response = new MessageResponse();
+        response.setMessage("Contraseña actualizada");
         return ResponseEntity.ok(response);
     }
 
