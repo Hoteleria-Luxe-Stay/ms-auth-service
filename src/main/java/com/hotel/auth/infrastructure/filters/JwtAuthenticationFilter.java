@@ -1,4 +1,4 @@
-package com.hotel.auth.infraestructure.filters;
+package com.hotel.auth.infrastructure.filters;
 
 import com.hotel.auth.domain.service.AuthService;
 import jakarta.servlet.FilterChain;

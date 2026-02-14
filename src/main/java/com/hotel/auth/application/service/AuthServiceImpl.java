@@ -34,12 +34,14 @@ import org.springframework.beans.factory.annotation.Value;
 
 import java.util.Map;
 import java.time.LocalDateTime;
-import java.util.Random;
+import java.security.SecureRandom;
 
 @Service
 public class AuthServiceImpl implements AuthService, UserDetailsService {
 
     private static final String DEFAULT_ROLE = "USER";
+
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AuthServiceImpl.class);
 
@@ -88,7 +90,7 @@ public class AuthServiceImpl implements AuthService, UserDetailsService {
 
             UserLoginEvent loginEvent = new UserLoginEvent(
                     user.getId(),
-                    user.getUsername(),
+                    user.getNombre(),
                     user.getEmail(),
                     user.getRole().getRolename()
             );
@@ -140,7 +142,7 @@ public class AuthServiceImpl implements AuthService, UserDetailsService {
         // Publicar evento de usuario registrado
         UserRegisteredEvent event = new UserRegisteredEvent(
                 user.getId(),
-                user.getUsername(),
+                user.getNombre(),
                 user.getEmail(),
                 user.getRole().getRolename()
         );
@@ -198,7 +200,7 @@ public class AuthServiceImpl implements AuthService, UserDetailsService {
 
         PasswordResetEvent event = new PasswordResetEvent(
                 user.getId(),
-                user.getUsername(),
+                user.getNombre(),
                 user.getEmail(),
                 code
         );
@@ -238,7 +240,7 @@ public class AuthServiceImpl implements AuthService, UserDetailsService {
     }
 
     private String generateCode() {
-        int code = new Random().nextInt(1_000_000);
+        int code = SECURE_RANDOM.nextInt(1_000_000);
         return String.format("%06d", code);
     }
 }

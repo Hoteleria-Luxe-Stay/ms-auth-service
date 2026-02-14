@@ -1,4 +1,4 @@
-package com.hotel.auth.infraestructure.config;
+package com.hotel.auth.infrastructure.config;
 
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import org.springframework.beans.factory.annotation.Value;

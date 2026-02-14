@@ -1,6 +1,6 @@
-package com.hotel.auth.infraestructure.config;
+package com.hotel.auth.infrastructure.config;
 
-import com.hotel.auth.infraestructure.filters.JwtAuthenticationFilter;
+import com.hotel.auth.infrastructure.filters.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;

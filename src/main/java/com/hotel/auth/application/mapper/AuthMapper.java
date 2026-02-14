@@ -30,7 +30,7 @@ public class AuthMapper {
     public static UserResponse toUserResponse(User user) {
         UserResponse response = new UserResponse();
         response.setId(user.getId());
-        response.setUsername(user.getUsername());
+        response.setUsername(user.getNombre());
         response.setEmail(user.getEmail());
         response.setTelefono(user.getTelefono());
         response.setActivo(Boolean.TRUE.equals(user.getActivo()));

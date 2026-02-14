@@ -1,4 +1,4 @@
-package com.hotel.auth.infraestructure.controllers;
+package com.hotel.auth.infrastructure.controllers;
 
 import com.hotel.auth.api.AuthApi;
 import com.hotel.auth.api.UsersApi;
