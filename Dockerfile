@@ -14,6 +14,7 @@ RUN mvn dependency:go-offline -B
 
 # Copiar codigo fuente
 COPY src ./src
+COPY contracts ./contracts
 
 # Compilar y empaquetar
 RUN mvn clean package -DskipTests -B
