@@ -4,6 +4,7 @@ import com.hotel.auth.infrastructure.config.RabbitConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -13,6 +14,9 @@ public class EventPublisher {
 
     private final RabbitTemplate rabbitTemplate;
 
+    @Value("${app.rabbitmq.sesion.exchange:hotel.events}")
+    private String eventsExchange;
+
     public EventPublisher(RabbitTemplate rabbitTemplate) {
         this.rabbitTemplate = rabbitTemplate;
     }
@@ -20,7 +24,7 @@ public class EventPublisher {
     public void publishUserRegistered(UserRegisteredEvent event) {
         try {
             rabbitTemplate.convertAndSend(
-                    RabbitConfig.EVENTS_EXCHANGE,
+                    eventsExchange,
                     RabbitConfig.USER_REGISTERED_ROUTING_KEY,
                     event
             );
@@ -33,7 +37,7 @@ public class EventPublisher {
     public void publishUserLogin(UserLoginEvent event) {
         try {
             rabbitTemplate.convertAndSend(
-                    RabbitConfig.EVENTS_EXCHANGE,
+                    eventsExchange,
                     RabbitConfig.USER_LOGIN_ROUTING_KEY,
                     event
             );
@@ -46,7 +50,7 @@ public class EventPublisher {
     public void publishPasswordReset(PasswordResetEvent event) {
         try {
             rabbitTemplate.convertAndSend(
-                    RabbitConfig.EVENTS_EXCHANGE,
+                    eventsExchange,
                     RabbitConfig.USER_PASSWORD_RESET_ROUTING_KEY,
                     event
             );
