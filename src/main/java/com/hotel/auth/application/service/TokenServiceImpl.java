@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -55,10 +55,11 @@ public class TokenServiceImpl implements TokenService {
                 .issuedAt(now)
                 .expiresAt(now.plus(jwtExpiration, ChronoUnit.SECONDS))
                 .claim("roles", roles)
+                .claim("userId", currentUser.getId())
                 .build();
 
         JwtEncoderParameters jwtEncoderParameters = JwtEncoderParameters.from(
-                JwsHeader.with(MacAlgorithm.HS256).build(),
+                JwsHeader.with(SignatureAlgorithm.RS256).build(),
                 claims
         );
 
@@ -78,7 +79,28 @@ public class TokenServiceImpl implements TokenService {
                 .build();
 
         JwtEncoderParameters jwtEncoderParameters = JwtEncoderParameters.from(
-                JwsHeader.with(MacAlgorithm.HS256).build(),
+                JwsHeader.with(SignatureAlgorithm.RS256).build(),
+                claims
+        );
+
+        return jwtEncoder.encode(jwtEncoderParameters).getTokenValue();
+    }
+
+    @Override
+    public String generateServiceToken(String clientId, String scope) {
+        Instant now = Instant.now();
+
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .subject(clientId)
+                .issuedAt(now)
+                .expiresAt(now.plus(jwtExpiration, ChronoUnit.SECONDS))
+                .claim("client_id", clientId)
+                .claim("scope", scope)
+                .claim("type", "service")
+                .build();
+
+        JwtEncoderParameters jwtEncoderParameters = JwtEncoderParameters.from(
+                JwsHeader.with(SignatureAlgorithm.RS256).build(),
                 claims
         );
 

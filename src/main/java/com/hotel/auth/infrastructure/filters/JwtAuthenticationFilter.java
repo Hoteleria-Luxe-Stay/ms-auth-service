@@ -9,11 +9,14 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,6 +28,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/auth/register",
             "/auth/refresh",
             "/auth/validate",
+            "/oauth/token",
             "/api-docs",
             "/swagger-ui",
             "/swagger-ui.html",
@@ -33,10 +37,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final AuthService authService;
     private final UserDetailsService userDetailsService;
+    private final JwtDecoder jwtDecoder;
 
-    public JwtAuthenticationFilter(AuthService authService, UserDetailsService userDetailsService) {
+    public JwtAuthenticationFilter(AuthService authService,
+                                   UserDetailsService userDetailsService,
+                                   JwtDecoder jwtDecoder) {
         this.authService = authService;
         this.userDetailsService = userDetailsService;
+        this.jwtDecoder = jwtDecoder;
     }
 
     @Override
@@ -55,13 +63,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
+        Jwt jwt;
         try {
-            if (!authService.validateToken(token.get())) {
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                return;
-            }
+            authService.validateToken(token.get());
+            jwt = jwtDecoder.decode(token.get());
         } catch (RuntimeException ex) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return;
+        }
+
+        boolean isServiceToken = jwt.getClaim("client_id") != null
+                || (jwt.getClaim("scope") != null && jwt.getClaim("userId") == null);
+
+        if (isServiceToken) {
+            UsernamePasswordAuthenticationToken authenticationToken =
+                    new UsernamePasswordAuthenticationToken(
+                            jwt.getSubject(),
+                            null,
+                            Collections.emptyList());
+            SecurityContextHolder.getContext().setAuthentication(authenticationToken);
+            filterChain.doFilter(request, response);
             return;
         }
 

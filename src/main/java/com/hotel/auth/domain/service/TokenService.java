@@ -8,6 +8,8 @@ public interface TokenService {
 
     String generateRefreshToken(Authentication authentication);
 
+    String generateServiceToken(String clientId, String scope);
+
     String getUserFromToken(String token);
 
     boolean validateToken(String token);
