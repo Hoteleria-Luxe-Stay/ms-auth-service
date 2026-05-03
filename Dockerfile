@@ -36,9 +36,7 @@ USER spring:spring
 # Puerto del servicio
 EXPOSE 8081
 
-# Variables de entorno por defecto
 ENV JAVA_OPTS="-Xms256m -Xmx512m"
-ENV SPRING_PROFILES_ACTIVE=default
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

@@ -1,6 +1,6 @@
-# Auth Service - Sistema de Reservas de Hoteles
+# Auth Service - Sistema de Reserva de Hoteles
 
-Microservicio de autenticación y autorización basado en **JWT**. Gestiona usuarios, roles, login, registro y validación de tokens.
+Microservicio de autenticación y autorización con **JWT firmado en RSA (RS256)**. Gestiona usuarios, roles, login, registro, reset de contraseña, y emite tokens técnicos (OAuth2 `client_credentials`) para los demás microservicios.
 
 ## Información del Servicio
 
@@ -10,14 +10,18 @@ Microservicio de autenticación y autorización basado en **JWT**. Gestiona usua
 | Java | 21 |
 | Spring Boot | 3.4.0 |
 | Spring Cloud | 2024.0.1 |
-| Context Path | /api/v1 |
+| Context Path | `/api/v1` |
 | Base de Datos | MySQL |
+| Algoritmo JWT | **RS256 (RSA SHA-256)** |
+| Firma | Clave privada RSA en este servicio; clave pública distribuida al gateway y a los servicios validadores |
 
-## Estructura del Proyecto
+## Estructura del Proyecto (Hexagonal)
 
 ```
-ms-auth/
+ms-auth-service/
 ├── pom.xml
+├── Dockerfile
+├── env.example                ← copialo a .env y completalo en DEV
 ├── contracts/
 │   └── auth-service-api.yaml
 └── src/main/
@@ -25,37 +29,43 @@ ms-auth/
     │   ├── AuthServiceApplication.java
     │   ├── application/
     │   │   ├── mapper/AuthMapper.java
-    │   │   └── service/
-    │   │       ├── AuthServiceImpl.java
-    │   │       ├── TokenServiceImpl.java
-    │   │       └── UserServiceImpl.java
+    │   │   └── service/ (AuthServiceImpl, TokenServiceImpl, UserServiceImpl)
     │   ├── domain/
-    │   │   ├── model/ (User, Role)
+    │   │   ├── model/ (User, Role, ServiceClient, PasswordResetToken)
     │   │   ├── repository/
     │   │   └── service/
     │   ├── infrastructure/
-    │   │   ├── config/ (SecurityConfig, RabbitConfig)
-    │   │   ├── controllers/AuthController.java
+    │   │   ├── config/ (SecurityConfig, RabbitConfig, EncoderConfig)
+    │   │   ├── controllers/ (AuthController, ServiceTokenController)
+    │   │   ├── events/ (UserRegisteredEvent, UserLoginEvent, PasswordResetEvent, EventPublisher)
     │   │   └── filters/JwtAuthenticationFilter.java
     │   └── helpers/
     │       ├── DataInit.java
-    │       └── exceptions/
+    │       └── exceptions/ (GlobalExceptionHandler, BusinessException, ...)
     └── resources/
-        └── application.yml
+        └── application.yml    ← bootstrap mínimo (config-server lo hidrata)
 ```
 
 ## Endpoints
 
-### Autenticación (Públicos)
+### Autenticación de Usuarios (públicos)
 
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
 | POST | `/api/v1/auth/register` | Registrar nuevo usuario |
-| POST | `/api/v1/auth/login` | Iniciar sesión |
+| POST | `/api/v1/auth/login` | Iniciar sesión (devuelve access + refresh token) |
 | POST | `/api/v1/auth/refresh` | Refrescar token |
-| POST | `/api/v1/auth/validate` | Validar token (interno) |
+| POST | `/api/v1/auth/validate` | Validar token (uso interno) |
+| POST | `/api/v1/auth/password/forgot` | Solicitar reset de contraseña |
+| POST | `/api/v1/auth/password/reset` | Confirmar reset con token |
 
-### Usuarios (Protegidos - JWT)
+### Tokens de Servicio (OAuth2 client_credentials)
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| POST | `/api/v1/oauth/token` | Emitir token técnico (`grant_type=client_credentials`) para otros microservicios |
+
+### Usuarios (protegidos por JWT)
 
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
@@ -64,527 +74,127 @@ ms-auth/
 
 ## Variables de Entorno
 
-| Variable | Descripción | Ejemplo |
-|----------|-------------|---------|
-| `SERVER_PORT` | Puerto del servicio | `8081` |
-| `SPRING_DATASOURCE_URL` | URL MySQL | `jdbc:mysql://mysql:3306/auth_db` |
-| `SPRING_DATASOURCE_USERNAME` | Usuario BD | `hotel_user` |
-| `SPRING_DATASOURCE_PASSWORD` | Contraseña BD | `hotel_pass` |
-| `SPRING_RABBITMQ_HOST` | Host RabbitMQ | `rabbitmq` |
-| `SPRING_RABBITMQ_PORT` | Puerto RabbitMQ | `5672` |
-| `SPRING_RABBITMQ_USERNAME` | Usuario RabbitMQ | `guest` |
-| `SPRING_RABBITMQ_PASSWORD` | Contraseña RabbitMQ | `guest` |
-| `JWT_SECRET_KEY` | Clave secreta JWT (256 bits) | `mi-clave-secreta...` |
-| `JWT_EXPIRATION` | Expiración token (ms) | `86400000` |
-| `JWT_REFRESH_EXPIRATION` | Expiración refresh (ms) | `604800000` |
-| `EUREKA_URL` | URL Eureka | `http://discovery-service:8761/eureka` |
-| `CONFIG_SERVER_URL` | URL Config Server | `http://config-server:8888` |
+Las variables se inyectan desde un archivo `.env` en DEV (cargado por el IDE) y desde `.env.prod` en PROD (consumido por `docker-compose.prod.yml`).
 
----
+| Variable | Obligatoria | Descripción | Ejemplo (DEV) |
+|----------|-------------|-------------|---------------|
+| `CONFIG_IMPORT` | No | Import de Spring Cloud Config | `optional:configserver:http://localhost:8888` |
+| `CONFIG_FAIL_FAST` | No | Falla rápido si config-server no responde | `false` (DEV) / `true` (PROD) |
+| `SERVER_PORT` | No | Puerto HTTP (default 8081) | `8081` |
+| `EUREKA_URL` | No | URL de Eureka (default `http://discovery-service:8761/eureka`) | `http://localhost:8761/eureka` |
+| `SPRING_DATASOURCE_URL` | **Sí** | JDBC URL de MySQL | `jdbc:mysql://localhost:3307/auth_db` |
+| `SPRING_DATASOURCE_USERNAME` | **Sí** | Usuario MySQL | - |
+| `SPRING_DATASOURCE_PASSWORD` | **Sí** | Contraseña MySQL | - |
+| `SPRING_JPA_HIBERNATE_DDL_AUTO` | No | Default `validate` (PROD-safe) | `update` (DEV) |
+| `SPRING_JPA_SHOW_SQL` | No | Default `false` (PROD-safe) | `true` (DEV) |
+| `SPRING_RABBITMQ_HOST` | **Sí** | Host RabbitMQ | `localhost` |
+| `SPRING_RABBITMQ_PORT` | **Sí** | Puerto RabbitMQ | `5672` |
+| `SPRING_RABBITMQ_USERNAME` | **Sí** | Usuario RabbitMQ | - |
+| `SPRING_RABBITMQ_PASSWORD` | **Sí** | Contraseña RabbitMQ | - |
+| `JWT_PRIVATE_KEY` | **Sí** | Clave privada RSA en PEM (1 línea con `\n`) | - |
+| `JWT_PUBLIC_KEY` | **Sí** | Clave pública RSA en PEM (1 línea con `\n`) | - |
+| `JWT_EXPIRATION` | No | Expiración del access token en segundos (default 3600) | `3600` |
+| `JWT_REFRESH_EXPIRATION` | No | Expiración del refresh token en segundos (default 86400) | `86400` |
+| `PASSWORD_RESET_EXPIRATION_MINUTES` | No | Default 15 | `15` |
+| `PASSWORD_RESET_MAX_ATTEMPTS` | No | Default 3 | `3` |
+| `PASSWORD_RESET_BLOCK_MINUTES` | No | Default 15 | `15` |
+| `HOTEL_SERVICE_CLIENT_ID` | **Sí*** | Client ID del hotel-service para OAuth2 c.c. | - |
+| `HOTEL_SERVICE_CLIENT_SECRET` | **Sí*** | Client secret del hotel-service | - |
+| `RESERVA_SERVICE_CLIENT_ID` | **Sí*** | Client ID del reserva-service | - |
+| `RESERVA_SERVICE_CLIENT_SECRET` | **Sí*** | Client secret del reserva-service | - |
+| `NOTIFICACION_SERVICE_CLIENT_ID` | **Sí*** | Client ID del notificacion-service | - |
+| `NOTIFICACION_SERVICE_CLIENT_SECRET` | **Sí*** | Client secret del notificacion-service | - |
+| `CORS_ALLOWED_ORIGINS` | **Sí** | Origen permitido para CORS | `http://localhost:4200` |
 
-## Docker
+\* Si quedan vacíos, `DataInit` no siembra el `ServiceClient` correspondiente y el resto de microservicios no podrán autenticarse service-to-service.
 
-### Dockerfile
-
-```dockerfile
-# Dockerfile para Auth Service
-# Multi-stage build para optimizar el tamano de la imagen
-
-# ==================== STAGE 1: Build ====================
-FROM maven:3.9-eclipse-temurin-21-alpine AS builder
-
-WORKDIR /app
-
-# Copiar archivos de configuracion de Maven primero (para cache de dependencias)
-COPY pom.xml .
-
-# Descargar dependencias (se cachea si pom.xml no cambia)
-RUN mvn dependency:go-offline -B
-
-# Copiar codigo fuente
-COPY src ./src
-COPY contracts ./contracts
-
-# Compilar y empaquetar
-RUN mvn clean package -DskipTests -B
-
-# ==================== STAGE 2: Runtime ====================
-FROM eclipse-temurin:21-jre-alpine
-
-WORKDIR /app
-
-# Crear usuario no-root para seguridad
-RUN addgroup -S spring && adduser -S spring -G spring
-
-# Copiar JAR desde stage de build
-COPY --from=builder /app/target/*.jar app.jar
-
-# Cambiar a usuario no-root
-USER spring:spring
-
-# Puerto del servicio
-EXPOSE 8081
-
-# Variables de entorno por defecto
-ENV JAVA_OPTS="-Xms256m -Xmx512m"
-ENV SPRING_PROFILES_ACTIVE=default
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8081/api/v1/actuator/health || exit 1
-
-# Comando de inicio
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
-```
-
-### docker-compose.yml
-
-```yaml
-version: '3.8'
-
-services:
-  auth-service:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: auth-service
-    ports:
-      - "8081:8081"
-    environment:
-      - SERVER_PORT=8081
-      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/auth_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-      - SPRING_DATASOURCE_USERNAME=hotel_user
-      - SPRING_DATASOURCE_PASSWORD=hotel_pass
-      - SPRING_RABBITMQ_HOST=rabbitmq
-      - SPRING_RABBITMQ_PORT=5672
-      - SPRING_RABBITMQ_USERNAME=guest
-      - SPRING_RABBITMQ_PASSWORD=guest
-      - JWT_SECRET_KEY=tu-clave-secreta-muy-segura-de-256-bits-minimo-para-hs256
-      - JWT_EXPIRATION=86400000
-      - JWT_REFRESH_EXPIRATION=604800000
-      - EUREKA_URL=http://discovery-service:8761/eureka
-      - CONFIG_SERVER_URL=http://config-server:8888
-      - JAVA_OPTS=-Xms256m -Xmx512m
-    depends_on:
-      mysql:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      config-server:
-        condition: service_healthy
-      discovery-service:
-        condition: service_healthy
-    networks:
-      - hotel-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/api/v1/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 90s
-    restart: unless-stopped
-
-networks:
-  hotel-network:
-    external: true
-```
-
-### Comandos Docker
+### Generar el keypair RSA
 
 ```bash
-# Compilar
-mvn clean package -DskipTests
-
-# Construir imagen
-docker build -t auth-service:latest .
-
-# Ejecutar
-docker run -d \
-  --name auth-service \
-  -p 8081:8081 \
-  -e SERVER_PORT=8081 \
-  -e SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/auth_db \
-  -e SPRING_DATASOURCE_USERNAME=hotel_user \
-  -e SPRING_DATASOURCE_PASSWORD=hotel_pass \
-  -e JWT_SECRET_KEY=tu-clave-secreta-muy-segura-256-bits \
-  -e EUREKA_URL=http://discovery-service:8761/eureka \
-  --network hotel-network \
-  auth-service:latest
-
-# Verificar
-curl http://localhost:8081/api/v1/actuator/health
-
-# Test login
-curl -X POST http://localhost:8081/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@hotel.com","password":"admin123"}'
+openssl genrsa -out private.pem 2048
+openssl rsa -pubout -in private.pem -out public.pem
 ```
 
----
+Convertí cada PEM a una sola línea reemplazando los saltos por `\n` literal antes de inyectarlo como env var.
 
-## Kubernetes
+## Eventos RabbitMQ (publisher)
 
-### Deployment
-
-```yaml
-# k8s/deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: auth-service
-  namespace: hotel-system
-  labels:
-    app: auth-service
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: auth-service
-  template:
-    metadata:
-      labels:
-        app: auth-service
-    spec:
-      containers:
-        - name: auth-service
-          image: ${ACR_NAME}.azurecr.io/auth-service:latest
-          ports:
-            - containerPort: 8081
-          env:
-            - name: SERVER_PORT
-              value: "8081"
-            - name: SPRING_DATASOURCE_URL
-              value: "jdbc:mysql://mysql:3306/auth_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
-            - name: SPRING_DATASOURCE_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: hotel-secrets
-                  key: mysql-user
-            - name: SPRING_DATASOURCE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: hotel-secrets
-                  key: mysql-password
-            - name: SPRING_RABBITMQ_HOST
-              value: "rabbitmq"
-            - name: SPRING_RABBITMQ_PORT
-              value: "5672"
-            - name: JWT_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: hotel-secrets
-                  key: jwt-secret
-            - name: JWT_EXPIRATION
-              value: "86400000"
-            - name: JWT_REFRESH_EXPIRATION
-              value: "604800000"
-            - name: EUREKA_URL
-              value: "http://discovery-service:8761/eureka"
-            - name: CONFIG_SERVER_URL
-              value: "http://config-server:8888"
-          resources:
-            requests:
-              memory: "512Mi"
-              cpu: "250m"
-            limits:
-              memory: "1Gi"
-              cpu: "500m"
-          livenessProbe:
-            httpGet:
-              path: /api/v1/actuator/health/liveness
-              port: 8081
-            initialDelaySeconds: 90
-            periodSeconds: 10
-          readinessProbe:
-            httpGet:
-              path: /api/v1/actuator/health/readiness
-              port: 8081
-            initialDelaySeconds: 60
-            periodSeconds: 5
-```
-
-### Service
-
-```yaml
-# k8s/service.yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: auth-service
-  namespace: hotel-system
-spec:
-  type: ClusterIP
-  selector:
-    app: auth-service
-  ports:
-    - port: 8081
-      targetPort: 8081
-      name: http
-```
-
-### Secret
-
-```yaml
-# k8s/secret.yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: auth-service-secrets
-  namespace: hotel-system
-type: Opaque
-stringData:
-  jwt-secret: "tu-clave-secreta-muy-segura-de-256-bits-minimo-para-hs256"
-```
-
-### Comandos Kubernetes
-
-```bash
-# Aplicar manifiestos
-kubectl apply -f k8s/secret.yaml
-kubectl apply -f k8s/deployment.yaml
-kubectl apply -f k8s/service.yaml
-
-# Verificar
-kubectl get pods -n hotel-system -l app=auth-service
-kubectl logs -f deployment/auth-service -n hotel-system
-
-# Port-forward para testing local
-kubectl port-forward svc/auth-service 8081:8081 -n hotel-system
-
-# Test
-curl http://localhost:8081/api/v1/actuator/health
-```
-
----
-
-## Azure
-
-### 1. Construir y Subir a ACR
-
-```bash
-# Variables
-export ACR_NAME="acrhotelreservas"
-export RESOURCE_GROUP="rg-hotel-reservas"
-
-# Login
-az acr login --name $ACR_NAME
-
-# Build en ACR
-az acr build \
-  --registry $ACR_NAME \
-  --image auth-service:v1.0.0 \
-  --image auth-service:latest \
-  .
-```
-
-### 2. Deployment en AKS
-
-```yaml
-# k8s/azure-deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: auth-service
-  namespace: hotel-system
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: auth-service
-  template:
-    metadata:
-      labels:
-        app: auth-service
-    spec:
-      containers:
-        - name: auth-service
-          image: acrhotelreservas.azurecr.io/auth-service:v1.0.0
-          ports:
-            - containerPort: 8081
-          env:
-            - name: SERVER_PORT
-              value: "8081"
-            - name: SPRING_DATASOURCE_URL
-              value: "jdbc:mysql://mysql-hotel-reservas.mysql.database.azure.com:3306/auth_db?useSSL=true&serverTimezone=UTC"
-            - name: SPRING_DATASOURCE_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: hotel-secrets
-                  key: mysql-user
-            - name: SPRING_DATASOURCE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: hotel-secrets
-                  key: mysql-password
-            - name: JWT_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: hotel-secrets
-                  key: jwt-secret
-            - name: EUREKA_URL
-              value: "http://discovery-service:8761/eureka"
-          resources:
-            requests:
-              memory: "512Mi"
-              cpu: "250m"
-            limits:
-              memory: "1Gi"
-              cpu: "500m"
-```
-
-### 3. Azure DevOps Pipeline
-
-```yaml
-# azure-pipelines.yml
-trigger:
-  branches:
-    include:
-      - main
-  paths:
-    include:
-      - ms-auth/**
-
-variables:
-  dockerRegistryServiceConnection: 'acr-connection'
-  imageRepository: 'auth-service'
-  containerRegistry: 'acrhotelreservas.azurecr.io'
-  dockerfilePath: 'ms-auth/Dockerfile'
-  tag: '$(Build.BuildId)'
-
-pool:
-  vmImage: 'ubuntu-latest'
-
-stages:
-  - stage: Build
-    jobs:
-      - job: Build
-        steps:
-          - task: Maven@3
-            displayName: 'Maven Package'
-            inputs:
-              mavenPomFile: 'ms-auth/pom.xml'
-              goals: 'clean package'
-              options: '-DskipTests'
-              javaHomeOption: 'JDKVersion'
-              jdkVersionOption: '1.21'
-
-          - task: Docker@2
-            displayName: 'Build and Push'
-            inputs:
-              command: buildAndPush
-              repository: $(imageRepository)
-              dockerfile: $(dockerfilePath)
-              containerRegistry: $(dockerRegistryServiceConnection)
-              tags: |
-                $(tag)
-                latest
-
-  - stage: Deploy
-    dependsOn: Build
-    jobs:
-      - deployment: Deploy
-        environment: 'production'
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                - task: KubernetesManifest@0
-                  inputs:
-                    action: deploy
-                    kubernetesServiceConnection: 'aks-connection'
-                    namespace: hotel-system
-                    manifests: |
-                      ms-auth/k8s/*.yaml
-                    containers: |
-                      $(containerRegistry)/$(imageRepository):$(tag)
-```
-
-### 4. Desplegar
-
-```bash
-# Obtener credenciales AKS
-az aks get-credentials --resource-group $RESOURCE_GROUP --name aks-hotel-reservas
-
-# Crear secrets
-kubectl create secret generic hotel-secrets \
-  --namespace hotel-system \
-  --from-literal=mysql-user="hotel_admin" \
-  --from-literal=mysql-password='P@ssw0rd123!' \
-  --from-literal=jwt-secret="tu-clave-secreta-muy-segura-256-bits"
-
-# Aplicar
-kubectl apply -f k8s/azure-deployment.yaml
-kubectl apply -f k8s/service.yaml
-
-# Verificar
-kubectl get pods -n hotel-system -l app=auth-service
-kubectl logs -f deployment/auth-service -n hotel-system
-```
-
----
-
-## Eventos RabbitMQ
-
-El servicio publica eventos cuando:
+El servicio publica en el `TopicExchange` `hotel.events` (configurable via `RABBITMQ_SESION_EXCHANGE`):
 
 | Evento | Routing Key | Trigger |
 |--------|-------------|---------|
-| UserRegisteredEvent | `user.registered` | Nuevo registro |
-| UserLoginEvent | `user.login` | Login exitoso |
+| `UserRegisteredEvent` | `user.registered` | Nuevo registro |
+| `UserLoginEvent` | `user.login` | Login exitoso |
+| `PasswordResetEvent` | `user.password.reset` | Solicitud de reset de contraseña |
 
-**Exchange:** `hotel.events` (TopicExchange)
+El `notificacion-service` consume estos eventos para enviar correos.
 
----
+## Datos Iniciales (al primer arranque)
+
+`DataInit.java` ejecuta al iniciar:
+
+1. **Roles**: crea `USER` y `ADMIN` si no existen.
+2. **Service Clients**: siembra los registros para que `hotel-service`, `reserva-service` y `notificacion-service` puedan autenticarse contra `/oauth/token`. Si los `*_CLIENT_ID/SECRET` no están seteados, el seeding se omite con un warning.
 
 ## Seguridad
 
-- **Algoritmo JWT:** HS256
-- **Password Encoding:** BCrypt
-- **Rutas Públicas:** `/auth/**`, `/swagger-ui/**`, `/api-docs/**`
-- **Rutas Protegidas:** Todas las demás requieren Bearer token
+- **Algoritmo JWT**: RS256 (RSA SHA-256).
+- **Password Encoding**: BCrypt (`EncoderConfig`).
+- **Sesiones**: STATELESS — el servicio no mantiene estado de sesión.
+- **Filter chain**: `JwtAuthenticationFilter` valida el access token con la clave pública.
+- **CORS**: deshabilitado en el servicio (lo maneja el `api-gateway`).
+- **Rutas públicas**: `/auth/**`, `/oauth/token`, `/api-docs/**`, `/swagger-ui/**`, `/actuator/**`.
 
----
+## Schema Migrations (Flyway)
 
-## Datos Iniciales
+El schema está versionado con **Flyway**. Cada cambio = nuevo script en `src/main/resources/db/migration/` con naming `V{n}__descripcion.sql`.
 
-Al iniciar, `DataInit` crea los roles si no existen:
-- `USER` - Rol por defecto para nuevos usuarios
-- `ADMIN` - Rol de administrador
+- `V1__init_schema.sql` — estado inicial: `roles`, `users`, `service_clients`, `password_reset_tokens` con FKs e índices.
+- Cambios futuros: `V2__...sql`, `V3__...sql`. **NUNCA se edita un script ya aplicado** — siempre se agrega uno nuevo.
+- Flyway corre **antes** que Hibernate: aplica los scripts pendientes y luego Hibernate valida (`ddl-auto: validate`) que las entidades calzan con el schema.
+- Tabla de control: `flyway_schema_history` (la crea Flyway al arrancar).
 
----
+### Variables relevantes
 
-## Troubleshooting
+| Variable | Default | Descripción |
+|----------|---------|-------------|
+| `SPRING_FLYWAY_ENABLED` | `true` | Activa/desactiva Flyway |
+| `SPRING_FLYWAY_BASELINE_ON_MIGRATE` | `false` | `true` solo si la DB ya tenía tablas pre-Flyway |
+| `SPRING_FLYWAY_VALIDATE_ON_MIGRATE` | `true` | Valida checksums de scripts ya aplicados |
 
-```bash
-# Ver logs
-kubectl logs -f deployment/auth-service -n hotel-system
+### Workflow primera vez
 
-# Verificar conexión BD
-kubectl exec -it deployment/auth-service -n hotel-system -- \
-  wget -qO- http://localhost:8081/api/v1/actuator/health
+1. Crear el schema vacío en MySQL: `CREATE DATABASE auth_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
+2. Levantar el servicio → Flyway aplica `V1` automáticamente.
+3. Verificar con `SELECT version, description, success FROM flyway_schema_history;`.
 
-# Debug JWT
-curl -X POST http://localhost:8081/api/v1/auth/validate \
-  -H "Content-Type: application/json" \
-  -d '{"token":"tu-jwt-token"}'
-```
-
----
-
-## Ejecución Local
+## Ejecución Local (DEV)
 
 ```bash
-# Compilar
-mvn clean package -DskipTests
+# 1. Levantar la infra (MySQL + RabbitMQ + Kafka)
+docker-compose -f docker-compose.infra.yml up -d
 
-# Ejecutar
-java -jar target/auth-service-1.0.0-SNAPSHOT.jar \
-  --server.port=8081 \
-  --spring.datasource.url=jdbc:mysql://localhost:3306/auth_db
+# 2. Copiar template de variables y completarlas
+cp env.example .env
+# editar .env con los valores reales (especialmente JWT_PRIVATE_KEY/PUBLIC_KEY y credenciales)
 
-# O con Maven
+# 3. Run desde IntelliJ con plugin EnvFile apuntando a .env,
+#    o desde CLI con un loader de envs.
 mvn spring-boot:run
 
 # Swagger UI
 open http://localhost:8081/api/v1/swagger-ui.html
 ```
+
+## Ejecución en Docker (PROD)
+
+El servicio se construye con `Dockerfile` (multi-stage build, JRE 21 alpine, usuario no-root, healthcheck en `/api/v1/actuator/health`). Se levanta como parte de `docker-compose.prod.yml` (a definir) consumiendo `.env.prod` con TODAS las variables marcadas como obligatorias.
+
+## Troubleshooting
+
+| Síntoma | Causa probable | Solución |
+|---------|----------------|----------|
+| `Service client X no configurado. Omitiendo.` | Faltan `*_CLIENT_ID/SECRET` en el `.env` | Setear las 3 parejas de credenciales |
+| `Could not resolve placeholder ...` | Falta env var obligatoria | Revisar la tabla, especialmente `CORS_ALLOWED_ORIGINS`, `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY` |
+| 401 desde otros servicios validando JWT | La clave pública no es pareja de la privada | Regenerar el keypair y propagar a gateway + servicios |
+| Config-server timeouts al iniciar | `CONFIG_FAIL_FAST=true` con config-server caído | DEV: usar `CONFIG_FAIL_FAST=false`; PROD: levantar config-server primero |
