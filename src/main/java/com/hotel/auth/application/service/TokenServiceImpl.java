@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
@@ -32,6 +33,12 @@ public class TokenServiceImpl implements TokenService {
 
     @Value("${application.security.jwt.refresh-expiration}")
     private int jwtRefreshExpiration;
+
+    @Value("${application.security.jwt.issuer}")
+    private String jwtIssuer;
+
+    @Value("${application.security.jwt.audience}")
+    private String jwtAudience;
 
     private final JwtEncoder jwtEncoder;
     private final JwtDecoder jwtDecoder;
@@ -51,6 +58,8 @@ public class TokenServiceImpl implements TokenService {
         User currentUser = (User) authentication.getPrincipal();
 
         JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer(jwtIssuer)
+                .audience(List.of(jwtAudience))
                 .subject(currentUser.getEmail())
                 .issuedAt(now)
                 .expiresAt(now.plus(jwtExpiration, ChronoUnit.SECONDS))
@@ -72,6 +81,8 @@ public class TokenServiceImpl implements TokenService {
         User currentUser = (User) authentication.getPrincipal();
 
         JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer(jwtIssuer)
+                .audience(List.of(jwtAudience))
                 .subject(currentUser.getEmail())
                 .issuedAt(now)
                 .expiresAt(now.plus(jwtRefreshExpiration, ChronoUnit.SECONDS))
@@ -91,6 +102,8 @@ public class TokenServiceImpl implements TokenService {
         Instant now = Instant.now();
 
         JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer(jwtIssuer)
+                .audience(List.of(jwtAudience))
                 .subject(clientId)
                 .issuedAt(now)
                 .expiresAt(now.plus(jwtExpiration, ChronoUnit.SECONDS))
