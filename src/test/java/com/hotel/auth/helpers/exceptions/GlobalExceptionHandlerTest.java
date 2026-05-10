@@ -9,7 +9,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -150,6 +149,6 @@ class GlobalExceptionHandlerTest {
     }
 
     private static class DummyTarget {
-        public void dummy(@Autowired String arg) { /* no-op */ }
+        public void dummy(String arg) { /* no-op */ }
     }
 }

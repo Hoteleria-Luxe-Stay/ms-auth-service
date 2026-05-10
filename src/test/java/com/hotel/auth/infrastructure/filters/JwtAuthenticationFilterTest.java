@@ -10,6 +10,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -65,30 +67,21 @@ class JwtAuthenticationFilterTest {
 
     // ==================== shouldNotFilter ====================
 
-    @Test
-    void shouldNotFilterReturnsTrueForPublicLoginPath() {
-        when(request.getServletPath()).thenReturn("/auth/login");
-
-        assertThat(filter.shouldNotFilter(request)).isTrue();
-    }
-
-    @Test
-    void shouldNotFilterReturnsTrueForPublicRegisterPath() {
-        when(request.getServletPath()).thenReturn("/auth/register");
-
-        assertThat(filter.shouldNotFilter(request)).isTrue();
-    }
-
-    @Test
-    void shouldNotFilterReturnsTrueForOAuthTokenPath() {
-        when(request.getServletPath()).thenReturn("/oauth/token");
-
-        assertThat(filter.shouldNotFilter(request)).isTrue();
-    }
-
-    @Test
-    void shouldNotFilterReturnsTrueForSwaggerPath() {
-        when(request.getServletPath()).thenReturn("/swagger-ui/index.html");
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "/auth/login",
+            "/auth/register",
+            "/auth/refresh",
+            "/auth/validate",
+            "/oauth/token",
+            "/api-docs",
+            "/swagger-ui",
+            "/swagger-ui.html",
+            "/swagger-ui/index.html",
+            "/error"
+    })
+    void shouldNotFilterReturnsTrueForPublicPaths(String path) {
+        when(request.getServletPath()).thenReturn(path);
 
         assertThat(filter.shouldNotFilter(request)).isTrue();
     }

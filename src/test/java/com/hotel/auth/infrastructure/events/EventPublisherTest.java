@@ -11,7 +11,6 @@ import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -39,9 +38,9 @@ class EventPublisherTest {
         eventPublisher.publishUserRegistered(event);
 
         verify(rabbitTemplate, times(1)).convertAndSend(
-                eq(EXCHANGE),
-                eq(RabbitConfig.USER_REGISTERED_ROUTING_KEY),
-                eq(event)
+                EXCHANGE,
+                RabbitConfig.USER_REGISTERED_ROUTING_KEY,
+                event
         );
     }
 
@@ -49,12 +48,12 @@ class EventPublisherTest {
     void publishUserRegisteredSwallowsExceptions() {
         UserRegisteredEvent event = new UserRegisteredEvent(1L, "name", "e@e.com", "USER");
         doThrow(new AmqpException("connection failed"))
-                .when(rabbitTemplate).convertAndSend(eq(EXCHANGE), eq(RabbitConfig.USER_REGISTERED_ROUTING_KEY), eq(event));
+                .when(rabbitTemplate).convertAndSend(EXCHANGE, RabbitConfig.USER_REGISTERED_ROUTING_KEY, event);
 
         // No exception expected — el publisher loggea y sigue
         eventPublisher.publishUserRegistered(event);
 
-        verify(rabbitTemplate, times(1)).convertAndSend(eq(EXCHANGE), eq(RabbitConfig.USER_REGISTERED_ROUTING_KEY), eq(event));
+        verify(rabbitTemplate, times(1)).convertAndSend(EXCHANGE, RabbitConfig.USER_REGISTERED_ROUTING_KEY, event);
     }
 
     @Test
@@ -64,9 +63,9 @@ class EventPublisherTest {
         eventPublisher.publishUserLogin(event);
 
         verify(rabbitTemplate, times(1)).convertAndSend(
-                eq(EXCHANGE),
-                eq(RabbitConfig.USER_LOGIN_ROUTING_KEY),
-                eq(event)
+                EXCHANGE,
+                RabbitConfig.USER_LOGIN_ROUTING_KEY,
+                event
         );
     }
 
@@ -74,11 +73,11 @@ class EventPublisherTest {
     void publishUserLoginSwallowsExceptions() {
         UserLoginEvent event = new UserLoginEvent(2L, "user2", "u2@e.com", "USER");
         doThrow(new AmqpException("connection failed"))
-                .when(rabbitTemplate).convertAndSend(eq(EXCHANGE), eq(RabbitConfig.USER_LOGIN_ROUTING_KEY), eq(event));
+                .when(rabbitTemplate).convertAndSend(EXCHANGE, RabbitConfig.USER_LOGIN_ROUTING_KEY, event);
 
         eventPublisher.publishUserLogin(event);
 
-        verify(rabbitTemplate, times(1)).convertAndSend(eq(EXCHANGE), eq(RabbitConfig.USER_LOGIN_ROUTING_KEY), eq(event));
+        verify(rabbitTemplate, times(1)).convertAndSend(EXCHANGE, RabbitConfig.USER_LOGIN_ROUTING_KEY, event);
     }
 
     @Test
@@ -88,9 +87,9 @@ class EventPublisherTest {
         eventPublisher.publishPasswordReset(event);
 
         verify(rabbitTemplate, times(1)).convertAndSend(
-                eq(EXCHANGE),
-                eq(RabbitConfig.USER_PASSWORD_RESET_ROUTING_KEY),
-                eq(event)
+                EXCHANGE,
+                RabbitConfig.USER_PASSWORD_RESET_ROUTING_KEY,
+                event
         );
     }
 
@@ -98,10 +97,10 @@ class EventPublisherTest {
     void publishPasswordResetSwallowsExceptions() {
         PasswordResetEvent event = new PasswordResetEvent(3L, "user3", "u3@e.com", "123456");
         doThrow(new AmqpException("connection failed"))
-                .when(rabbitTemplate).convertAndSend(eq(EXCHANGE), eq(RabbitConfig.USER_PASSWORD_RESET_ROUTING_KEY), eq(event));
+                .when(rabbitTemplate).convertAndSend(EXCHANGE, RabbitConfig.USER_PASSWORD_RESET_ROUTING_KEY, event);
 
         eventPublisher.publishPasswordReset(event);
 
-        verify(rabbitTemplate, times(1)).convertAndSend(eq(EXCHANGE), eq(RabbitConfig.USER_PASSWORD_RESET_ROUTING_KEY), eq(event));
+        verify(rabbitTemplate, times(1)).convertAndSend(EXCHANGE, RabbitConfig.USER_PASSWORD_RESET_ROUTING_KEY, event);
     }
 }
