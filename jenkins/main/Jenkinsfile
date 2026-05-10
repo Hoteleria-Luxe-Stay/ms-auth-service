@@ -20,9 +20,10 @@ pipeline {
 
     environment {
         // ==================== APP ====================
-        // SERVICE_NAME = nombre del servicio en docker-compose del backend (matchea git repo)
-        // IMAGE_NAME   = repo name en Docker Hub (matchea Maven artifactId, sin prefix ms-)
-        SERVICE_NAME = 'ms-auth-service'
+        // SERVICE_NAME = nombre del servicio en docker-compose del backend
+        //                (ej: 'auth-service', NO 'ms-auth-service')
+        // IMAGE_NAME   = repo name en Docker Hub (== Maven artifactId)
+        SERVICE_NAME = 'auth-service'
         IMAGE_NAME   = 'auth-service'
         IMAGE_TAG    = "${env.BUILD_NUMBER}"
 
@@ -98,9 +99,8 @@ pipeline {
         }
 
         stage('🚀 Deploy Application') {
-            // DISABLED hasta migrar backend docker-compose.yml a image: darfelio/<svc>:latest
-            // Para activar: cambiar `return false` por `return true` (o eliminar el bloque when).
-            when { expression { return false } }
+            // ACTIVADO. SSH al backend, pull image fresca de Docker Hub, recrear container.
+            // Solo corre si los stages anteriores pasaron (Tests + Sonar + QualityGate + BuildImage).
             steps {
                 sshagent(credentials: ["${SSH_CRED_ID}"]) {
                     sh """
