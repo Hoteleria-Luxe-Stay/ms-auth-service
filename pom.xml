@@ -159,6 +159,31 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- ==================================================================
+             OBSERVABILITY (Round 10) — metrics + traces + logs unificados via OTel
+             - micrometer-registry-prometheus: expone /actuator/prometheus en formato
+               Prometheus para scrape pull tradicional.
+             - micrometer-tracing-bridge-otel: integra Spring Observability con el
+               SDK OTel — auto-instrumenta HTTP server, RestTemplate, etc.
+             - opentelemetry-exporter-otlp: envia traces (y opcionalmente metrics)
+               al OTel Collector via OTLP gRPC en port 4317.
+             Las env vars OTEL_EXPORTER_OTLP_ENDPOINT y OTEL_SERVICE_NAME se
+             definen en docker-compose.yml del backend.
+        ================================================================== -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
