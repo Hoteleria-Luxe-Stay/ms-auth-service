@@ -12,7 +12,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RabbitConfig {
 
-    // Routing keys: identificadores de protocolo fijos
+    // Routing keysss: identificadores de protocolo fijos
     public static final String USER_REGISTERED_ROUTING_KEY = "user.registered";
     public static final String USER_LOGIN_ROUTING_KEY = "user.login";
     public static final String USER_PASSWORD_RESET_ROUTING_KEY = "user.password.reset";
